@@ -121,12 +121,12 @@ mod sodium;
 pub mod packet;
 
 pub mod signature;
-pub use signature::Verify;
+
 pub mod key;
 
 
 #[derive(Debug)]
-pub enum SymmetricKey {
+enum SymmetricKey {
     AES256([u8; 32]),
 }
 

@@ -112,12 +112,14 @@ impl Verify for Key {
     }
 }
 
+#[doc(hidden)]
 pub trait Verify {
 
     fn verify_signature(&self, hash_algorithm:HashAlgorithm, hash:&[u8], sig:&[u8]) -> Result<bool, Error>;
 
 }
 
+#[doc(hidden)]
 pub fn read<P:super::PGP>(p:&mut P,
                           mut body: &[u8])
                           -> Result<(), Error> {
