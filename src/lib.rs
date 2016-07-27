@@ -1,4 +1,13 @@
+//! The goal of this crate is to interact with the OpenPGP-format,
+//! i.e. parse it and produce correct PGP files.  OpenPGP can describe
+//! so many things that parsing is much more pleasant to write in an
+//! event-driven way, and the resulting API is also smaller.
 //!
+//! This version is not yet able to produce encrypted content, but
+//! signed messages should work, as demonstrated by the following
+//! example, which reads a private key (in the format output by `gpg
+//! --export-secret-keys -a`), signs a message and reads it back,
+//! verifying the signature.
 //!
 //! ```
 //! use openpgp::*;
