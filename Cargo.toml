@@ -5,13 +5,13 @@ authors = ["Pierre-Étienne Meunier <pe@pijul.org>"]
 
 [dependencies]
 log = "0.3"
-byteorder = "*"
+byteorder = "0.5"
 rustc-serialize = "0.3"
-libc = "*"
-bitflags = "*"
-openssl = "*"
-flate2 = "*"
+libc = "0.2"
+bitflags = "0.7"
+openssl = "0.7"
+flate2 = "0.2"
 
 [dev-dependencies]
 env_logger = "0.3"
-rand = "*"
+rand = "0.3"
