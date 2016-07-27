@@ -1,0 +1,17 @@
+[package]
+name = "pgp"
+version = "0.1.0"
+authors = ["Pierre-Étienne Meunier <pe@pijul.org>"]
+
+[dependencies]
+log = "0.3"
+byteorder = "*"
+rustc-serialize = "0.3"
+libc = "*"
+bitflags = "*"
+openssl = "*"
+flate2 = "*"
+
+[dev-dependencies]
+env_logger = "0.3"
+rand = "*"
