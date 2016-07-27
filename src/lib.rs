@@ -9,6 +9,8 @@
 //! --export-secret-keys -a`), signs a message and reads it back,
 //! verifying the signature.
 //!
+//! PGP files are split into *packets*, with different meanings.
+//!
 //! ```
 //! use openpgp::*;
 //! use openpgp::key::*;
@@ -68,7 +70,7 @@
 //!     let mut sk = secret_key.as_bytes();
 //!     let sk = read_armored(&mut sk);
 //!     let mut sk = &sk[..];
-//!     p.parse(&mut sk).unwrap();
+//!     parse(&mut p, &mut sk).unwrap();
 //! };
 //!
 //! let mut s = Vec::new();
@@ -88,7 +90,7 @@
 //!     }
 //! }
 //! let mut slice = &s[..];
-//! p.parse(&mut slice).unwrap();
+//! parse(&mut p, &mut slice).unwrap();
 //! ```
 
 #[macro_use]
@@ -132,7 +134,7 @@ const PK_SESSION_KEY_VERSION: u8 = 3;
 const SYM_INT_DATA_VERSION: u8 = 1;
 const ONE_PASS_VERSION: u8 = 3;
 
-struct Parse {
+struct Parser {
     mdc_hash: Option<Vec<u8>>,
     one_pass: Vec<OnePass>,
     session_key: Option<SymmetricKey>
@@ -146,111 +148,136 @@ struct OnePass {
     keyid: [u8; 8],
 }
 
+/// This trait is mostly a collection of callbacks called while parsing a series of PGP packets.
 pub trait PGP: Sized {
 
+    /// Called when the given public key is about to be used for
+    /// verifying a signature. The default implementation just panics.
     #[allow(unused_variables)]
     fn get_public_signing_key<'a>(&'a mut self, keyid: &[u8]) -> Option<&'a key::Key> {
         unimplemented!()
     }
 
+    /// Called when the secret key with the given identifier is
+    /// needed. The default implementation just panics.
     #[allow(unused_variables)]
     fn get_secret_key<'a>(&'a mut self, keyid: &[u8]) -> &'a key::SecretKey {
         unimplemented!()
     }
 
+    /// Called when a password is required to decrypt a secret/private key.
     #[allow(unused_variables)]
     fn get_password(&mut self) -> &[u8] {
         unimplemented!()
     }
 
+    /// Should return the data signed by a signature packet.
     #[allow(unused_variables)]
     fn get_signed_data(&mut self, sigtype: signature::Type) -> &[u8] {
         unimplemented!()
     }
 
+    /// Called on a public key packet.
     #[allow(unused_variables)]
     fn public_key(&mut self, creation_time: u32, pk: key::PublicKey) -> Result<(), Error> {
         debug!("public key: {:?}", creation_time);
         Ok(())
     }
+
+    /// Called on a public subkey packet.
     #[allow(unused_variables)]
     fn public_subkey(&mut self, creation_time: u32, pk: key::PublicKey) -> Result<(), Error> {
         debug!("public subkey: {:?}", creation_time);
         Ok(())
     }
 
+    /// Called on a secret key packet.
     #[allow(unused_variables)]
     fn secret_key(&mut self, creation_time: u32, pk: key::SecretKey) -> Result<(), Error> {
         debug!("secret key: {:?}", creation_time);
         Ok(())
     }
 
+    /// Called on a secret subkey packet.
     #[allow(unused_variables)]
     fn secret_subkey(&mut self, creation_time: u32, pk: key::SecretKey) -> Result<(), Error> {
         debug!("secret subkey: {:?}", creation_time);
         Ok(())
     }
 
+    /// Called on a userid packet, this is normally used to store a user's name and email address.
     #[allow(unused_variables)]
     fn user_id(&mut self, user_id: &str) -> Result<(), Error> {
         debug!("user id: {:?}", user_id);
         Ok(())
     }
 
+    /// Called on a user attribute packet, which is used to store
+    /// free-form extra information about the user. The only
+    /// `attribute_type` defined in RFC4880 is `1`, which means it's
+    /// an image (of unspecified format, good luck!).
     #[allow(unused_variables)]
-    fn user_attribute(&mut self, typ: u8, attr: &[u8]) -> Result<(), Error> {
+    fn user_attribute(&mut self, attribute_type: u8, attr: &[u8]) -> Result<(), Error> {
         Ok(())
     }
 
+    /// Signatures can be used on a wide variety of things, and their
+    /// meaning is specified by one or more subpackets.
     #[allow(unused_variables)]
     fn signature_subpacket(&mut self, subpacket: signature::Subpacket) -> Result<(), Error> {
         debug!("subpacket: {:?}", subpacket);
         Ok(())
     }
 
+    /// Called when we've read a signature packet and checked the
+    /// signature. This function is always called after verifying a
+    /// signature, no matter whether the signature is valid (this is
+    /// specified by `is_ok`).
     #[allow(unused_variables)]
     fn signature_verified(&mut self, is_ok:bool) -> Result<(), Error> {
         debug!("signature is ok: {:?}", is_ok);
         Ok(())
     }
 
+    /// "Raw" data packet.
     #[allow(unused_variables)]
     fn literal(&mut self, file_name:&str, date:u32, literal: &[u8]) -> Result<(), Error> {
         Ok(())
     }
 
+    /// Trust packet, mostly free/unspecified -form. I wouldn't rely too much on what's in there.
     #[allow(unused_variables)]
     fn trust(&mut self, trust: &[u8]) -> Result<(), Error> {
         Ok(())
     }
-
-    fn parse<R: Read>(&mut self, r: &mut R) -> Result<(), Error> {
-        let mut parse = Parse {
-            mdc_hash: None,
-            one_pass: Vec::new(),
-            session_key: None
-        };
-        let mut buffer = Vec::new();
-        parse_(self, r, &mut buffer, &mut parse)
-    }
 }
 
+/// Start the parsing. The default implementation should probably not be overwritten.
+pub fn parse<P:PGP, R: Read>(p: &mut P, r: &mut R) -> Result<(), Error> {
+    let mut parser = Parser {
+        mdc_hash: None,
+        one_pass: Vec::new(),
+        session_key: None
+    };
+    let mut buffer = Vec::new();
+    parse_(p, r, &mut buffer, &mut parser)
+}
 
 
 fn parse_<R: Read, P: PGP>(p: &mut P,
                            r: &mut R,
                            packet_body: &mut Vec<u8>,
-                           parse: &mut Parse)
+                           parser: &mut Parser)
                            -> Result<(), Error> {
 
     loop {
         match packet::read(r, packet_body) {
             Ok(packet::Tag::PublicKeyEncryptedSessionKey) => {
-                parse.session_key = Some(try!(parse_pk_session_key(p, &packet_body)));
+                parser.session_key = Some(try!(parse_pk_session_key(p, &packet_body)));
             }
 
             Ok(packet::Tag::Signature) => {
-                parse.one_pass.pop(); // This is not actually used by GnuPG.
+                parser.one_pass.pop(); // This is not actually used by GnuPG.
                 try!(signature::read(p, &packet_body));
             }
 
@@ -278,7 +305,7 @@ fn parse_<R: Read, P: PGP>(p: &mut P,
                     HashAlgorithm::SHA256 => Type::SHA256,
                     _ => unimplemented!(),
                 };
-                parse.one_pass.push(OnePass {
+                parser.one_pass.push(OnePass {
                     sig_type: sig_type,
                     hasher: Hasher::new(hash_type),
                     pk_algo: pk_algo,
@@ -308,20 +335,20 @@ fn parse_<R: Read, P: PGP>(p: &mut P,
                 let mut body = &packet_body[..];
                 let comp_algo = try!(CompressionAlgorithm::from_byte(try!(body.read_u8())));
                 match comp_algo {
-                    CompressionAlgorithm::Uncompressed => try!(p.parse(&mut body)),
+                    CompressionAlgorithm::Uncompressed => try!(parse(p, &mut body)),
                     CompressionAlgorithm::Zip => {
                         let mut decoder = flate2::read::DeflateDecoder::new(&mut body);
                         let mut buf = Vec::new();
                         try!(decoder.read_to_end(&mut buf));
                         let mut slice = &buf[..];
-                        try!(p.parse(&mut slice))
+                        try!(parse(p, &mut slice))
                     }
                     CompressionAlgorithm::Zlib => {
                         let mut decoder = flate2::read::ZlibDecoder::new(&mut body);
                         let mut buf = Vec::new();
                         try!(decoder.read_to_end(&mut buf));
                         let mut slice = &buf[..];
-                        try!(p.parse(&mut slice))
+                        try!(parse(p, &mut slice))
                     }
                     CompressionAlgorithm::Bzip2 => unimplemented!(),
                 }
@@ -350,7 +377,7 @@ fn parse_<R: Read, P: PGP>(p: &mut P,
 
                 match type_ {
                     b'b' => {
-                        for onepass in parse.one_pass.iter_mut() {
+                        for onepass in parser.one_pass.iter_mut() {
                             try!(onepass.hasher.write_all(lit));
                         }
                         try!(p.literal(try!(std::str::from_utf8(file_name)), date, lit));
@@ -387,7 +414,7 @@ fn parse_<R: Read, P: PGP>(p: &mut P,
                 assert_eq!(try!(body.read_u8()), SYM_INT_DATA_VERSION);
                 // decrypt(t: Type, key: &[u8], iv: &[u8], data: &[u8])
                 const AES_BLOCK_SIZE: usize = 16;
-                let data = match parse.session_key {
+                let data = match parser.session_key {
                     Some(SymmetricKey::AES256(ref k)) => {
                         // block size 16;
                         use openssl::crypto::symm::*;
@@ -404,15 +431,15 @@ fn parse_<R: Read, P: PGP>(p: &mut P,
                 if mdc[0] == 0xD3 && mdc[1] == 0x14 {
                     // This packet is not produced by GnuPG, contrarily to RFC4880.
                     use openssl::crypto::hash::{hash, Type};
-                    parse.mdc_hash = Some(hash(Type::SHA1, clear0));
+                    parser.mdc_hash = Some(hash(Type::SHA1, clear0));
                 }
                 let mut new_body = Vec::new();
-                try!(parse_(p, &mut clear, &mut new_body, parse))
+                try!(parse_(p, &mut clear, &mut new_body, parser))
             }
 
             Ok(packet::Tag::ModificationDetectionCode) => {
                 // Already handled before.
-                if let Some(ref h) = parse.mdc_hash {
+                if let Some(ref h) = parser.mdc_hash {
                     assert_eq!(&packet_body[..], &h[..])
                 }
             }
@@ -598,13 +625,13 @@ mod tests {
             data: contents.to_vec(),
             password: b"",
         };
-        p.parse(&mut slice).unwrap();
+        parse(&mut p, &mut slice).unwrap();
         let s = {
             let mut signature = signature.as_bytes();
             super::read_armored(&mut signature)
         };
         let mut slice = &s[..];
-        p.parse(&mut slice).unwrap();
+        parse(&mut p, &mut slice).unwrap();
     }
 
     #[test]
@@ -626,7 +653,7 @@ mod tests {
             let mut sk = SECRET_KEY.as_bytes();
             let sk = super::read_armored(&mut sk);
             let mut sk = &sk[..];
-            p.parse(&mut sk).unwrap();
+            parse(&mut p, &mut sk).unwrap();
         };
         let mut s = Vec::new();
         {
@@ -645,7 +672,7 @@ mod tests {
             }
         }
         let mut slice = &s[..];
-        p.parse(&mut slice).unwrap();
+        parse(&mut p, &mut slice).unwrap();
 
     }
 
@@ -665,7 +692,7 @@ mod tests {
             let mut sk = SECRET_KEY.as_bytes();
             let sk = super::read_armored(&mut sk);
             let mut sk = &sk[..];
-            p.parse(&mut sk).unwrap();
+            parse(&mut p, &mut sk).unwrap();
         }
         assert!(p.key.is_some())
     }
@@ -687,7 +714,7 @@ mod tests {
             let mut sk = SECRET_KEY.as_bytes();
             let sk = super::read_armored(&mut sk);
             let mut sk = &sk[..];
-            p.parse(&mut sk).unwrap();
+            parse(&mut p, &mut sk).unwrap();
         }
 
         if let Some(Key::Secret(ref sk)) = p.key {
@@ -730,10 +757,10 @@ mod tests {
             let mut sk = SECRET_KEY.as_bytes();
             let sk = super::read_armored(&mut sk);
             let mut sk = &sk[..];
-            p.parse(&mut sk).unwrap();
+            parse(&mut p, &mut sk).unwrap();
         }
 
-        p.parse(&mut email).unwrap();
+        parse(&mut p, &mut email).unwrap();
     }
 
     // This fails, because it's a DSA key, which is not included in OpenSSL.
