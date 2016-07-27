@@ -213,6 +213,6 @@ fn test_packet_formats() {
     }
 }
 
-pub fn write_packet<W: Write>(w: W, packet_tag: Tag, contents: &[u8]) -> Result<(), Error> {
+pub fn write<W: Write>(w: W, packet_tag: Tag, contents: &[u8]) -> Result<(), Error> {
     write_packet_(w, true, packet_tag, contents)
 }

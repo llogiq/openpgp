@@ -13,7 +13,7 @@
 //! impl PGP for P {
 //!
 //!     fn get_secret_key<'a>(&'a mut self, _: &[u8]) -> &'a key::SecretKey {
-//!         self.subkey.as_ref().unwrap()
+//!         self.subkey.as_ref().unwrap().unwrap_secret()
 //!     }
 //!
 //!     fn get_password(&mut self) -> &[u8] {
@@ -33,12 +33,17 @@
 //!         self.subkey = Some(Key::Secret(secret_key));
 //!         Ok(())
 //!     }
-//!
-//!     fn signature(&mut self, packet: signature::SignaturePacket) -> Result<(), Error> {
-//!         let pk = self.key.as_ref().unwrap();
-//!         println!("Signature verified: {:?}", pk.verify(packet, &self.data));
+//!     fn get_public_signing_key<'a>(&'a mut self, keyid: &[u8]) -> Option<&'a key::Key> {
+//!         self.key.as_ref()
+//!     }
+//!     fn signature_verified(&mut self, is_ok:bool) -> Result<(), Error> {
+//!         println!("Verified: {:?}", is_ok);
 //!         Ok(())
 //!     }
+//!     fn get_signed_data(&mut self, _: signature::Type) -> &[u8] {
+//!         &self.data
+//!     }
+//!
 //! }
 //! let secret_key = "-----BEGIN PGP PRIVATE KEY BLOCK-----\nVersion: GnuPG v2\n\n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\n=USRz\n-----END PGP PRIVATE KEY BLOCK-----\n";
 //!
@@ -70,7 +75,7 @@
 //!                 &[signature::Subpacket::SignatureCreationTime(now)],
 //!                 &[])
 //!           .unwrap();
-//!         packet::write_packet(&mut s, packet::Tag::Signature, &buf).unwrap();
+//!         packet::write(&mut s, packet::Tag::Signature, &buf).unwrap();
 //!     }
 //! }
 //! let mut slice = &s[..];
@@ -133,6 +138,12 @@ struct OnePass {
 }
 
 pub trait PGP: Sized {
+
+    #[allow(unused_variables)]
+    fn get_public_signing_key<'a>(&'a mut self, keyid: &[u8]) -> Option<&'a key::Key> {
+        unimplemented!()
+    }
+
     #[allow(unused_variables)]
     fn get_secret_key<'a>(&'a mut self, keyid: &[u8]) -> &'a key::SecretKey {
         unimplemented!()
@@ -140,6 +151,11 @@ pub trait PGP: Sized {
 
     #[allow(unused_variables)]
     fn get_password(&mut self) -> &[u8] {
+        unimplemented!()
+    }
+
+    #[allow(unused_variables)]
+    fn get_signed_data(&mut self, sigtype: signature::Type) -> &[u8] {
         unimplemented!()
     }
 
@@ -178,12 +194,19 @@ pub trait PGP: Sized {
     }
 
     #[allow(unused_variables)]
-    fn signature(&mut self, packet: signature::SignaturePacket) -> Result<(), Error> {
+    fn signature_subpacket(&mut self, subpacket: signature::Subpacket) -> Result<(), Error> {
+        debug!("subpacket: {:?}", subpacket);
         Ok(())
     }
 
     #[allow(unused_variables)]
-    fn literal(&mut self, literal: &[u8]) -> Result<(), Error> {
+    fn signature_verified(&mut self, is_ok:bool) -> Result<(), Error> {
+        debug!("signature is ok: {:?}", is_ok);
+        Ok(())
+    }
+
+    #[allow(unused_variables)]
+    fn literal(&mut self, file_name:&str, date:u32, literal: &[u8]) -> Result<(), Error> {
         Ok(())
     }
 
@@ -219,8 +242,7 @@ fn parse_<R: Read, P: PGP>(p: &mut P,
 
             Ok(packet::Tag::Signature) => {
                 parse.one_pass.pop(); // This is not actually used by GnuPG.
-                let packet = signature::SignaturePacket(&packet_body);
-                try!(p.signature(packet))
+                try!(signature::read(p, &packet_body));
             }
 
             Ok(packet::Tag::SymmetricKeyEncryptedSessionKey) => unimplemented!(),
@@ -322,7 +344,7 @@ fn parse_<R: Read, P: PGP>(p: &mut P,
                         for onepass in parse.one_pass.iter_mut() {
                             try!(onepass.hasher.write_all(lit));
                         }
-                        try!(p.literal(lit));
+                        try!(p.literal(try!(std::str::from_utf8(file_name)), date, lit));
                     }
                     _ => unimplemented!(),
                 }
@@ -511,7 +533,12 @@ mod tests {
                 panic!("no key")
             }
         }
-
+        fn get_signed_data(&mut self, sigtype: signature::Type) -> &[u8] {
+            &self.data
+        }
+        fn get_public_signing_key<'a>(&'a mut self, keyid: &[u8]) -> Option<&'a key::Key> {
+            self.key.as_ref()
+        }
         fn get_password(&mut self) -> &[u8] {
             &self.password
         }
@@ -529,16 +556,15 @@ mod tests {
             Ok(())
         }
 
-        fn literal(&mut self, literal: &[u8]) -> Result<(), Error> {
+        fn literal(&mut self, file_name:&str, date:u32, literal: &[u8]) -> Result<(), Error> {
+            println!("literal: {:?} {:?}", file_name, date);
             self.data.clear();
             self.data.extend(literal);
             Ok(())
         }
 
-        fn signature(&mut self, packet: signature::SignaturePacket) -> Result<(), Error> {
-            if let Some(ref pk) = self.key {
-                println!("Verified: {:?}", pk.verify(packet, &self.data));
-            }
+        fn signature_verified(&mut self, is_ok:bool) -> Result<(), Error> {
+            println!("Verified: {:?}", is_ok);
             Ok(())
         }
     }
@@ -606,7 +632,7 @@ mod tests {
                         &[signature::Subpacket::SignatureCreationTime(now)],
                         &[])
                   .unwrap();
-                packet::write_packet(&mut s, packet::Tag::Signature, &buf).unwrap();
+                packet::write(&mut s, packet::Tag::Signature, &buf).unwrap();
             }
         }
         let mut slice = &s[..];

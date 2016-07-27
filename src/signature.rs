@@ -111,122 +111,142 @@ impl Verify for Key {
         }
     }
 }
-#[derive(Copy, Clone)]
-pub struct SignaturePacket<'a>(pub &'a [u8]);
 
 pub trait Verify {
 
     fn verify_signature(&self, hash_algorithm:HashAlgorithm, hash:&[u8], sig:&[u8]) -> Result<bool, Error>;
-    
-    fn verify<B:AsRef<[u8]>>(&self,
-                             body: SignaturePacket,
-                             data: B)
-                             -> Result<bool, Error> {
-        let mut body = body.0;
-        let data = data.as_ref();
+
+}
+
+pub fn read<P:super::PGP>(p:&mut P,
+                          mut body: &[u8])
+                          -> Result<(), Error> {
+
+    let initial_body = body;
+    debug!("initial_body.len(): {:?}", initial_body.len());
+
+    let version = try!(body.read_u8());
+    let mut issuer = [0;8];
+
+    debug!("signature version: {:?}", version);
+    let (hash_algo, digest) = if version == 3 {
+
+        if try!(body.read_u8()) != 5 {
+            return Err(Error::InvalidSignature)
+        }
         let initial_body = body;
-        debug!("initial_body.len(): {:?}", initial_body.len());
+        let sigtype = try!(Type::from_byte(try!(body.read_u8())));
+        let creation_time = try!(body.read_u32::<BigEndian>());
 
-        let version = try!(body.read_u8());
+        try!(p.signature_subpacket(Subpacket::SignatureCreationTime(creation_time)));
+        
+        let (key_id, mut body) = body.split_at(8);
+        issuer.clone_from_slice(key_id);
+        let pk_algo = try!(PublicKeyAlgorithm::from_byte(try!(body.read_u8())));
+        let hash_algo = try!(HashAlgorithm::from_byte(try!(body.read_u8())));
 
-        debug!("signature version: {:?}", version);
-        let (hash_algo, digest) = if version == 3 {
-
-            if try!(body.read_u8()) != 5 {
-                return Err(Error::InvalidSignature)
-            }
-            let initial_body = body;
-            let sigtype = Type::from_byte(try!(body.read_u8()));
-            let creation_time = try!(body.read_u32::<BigEndian>());
-            let (key_id, mut body) = body.split_at(8);
-
-            let pk_algo = try!(PublicKeyAlgorithm::from_byte(try!(body.read_u8())));
-            let hash_algo = try!(HashAlgorithm::from_byte(try!(body.read_u8())));
-
-            match pk_algo {
-                PublicKeyAlgorithm::Ed25519 => {},
-                PublicKeyAlgorithm::RSAEncryptSign => {},
-                t => return Err(Error::UnsupportedPublicKey(t))
-            }
-            match hash_algo {
-                HashAlgorithm::SHA256 => {},
-                t => return Err(Error::UnsupportedHash(t))
-            }
-            
-            let left_0 = try!(body.read_u8());
-            let left_1 = try!(body.read_u8());
+        match pk_algo {
+            PublicKeyAlgorithm::Ed25519 => {},
+            PublicKeyAlgorithm::RSAEncryptSign => {},
+            t => return Err(Error::UnsupportedPublicKey(t))
+        }
+        match hash_algo {
+            HashAlgorithm::SHA256 => {},
+            t => return Err(Error::UnsupportedHash(t))
+        }
+        
+        let left_0 = try!(body.read_u8());
+        let left_1 = try!(body.read_u8());
 
 
-            let mut v: Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::new();
+        {
+            let data = p.get_signed_data(sigtype);
             v.extend(data);
-            v.extend(&initial_body[0..5]);
-            let digest = sodium::sha256::hash(&v);
+        }
+        v.extend(&initial_body[0..5]);
+        let digest = sodium::sha256::hash(&v);
 
-            if digest[0] != left_0 || digest[1] != left_1 {
-                return Ok(false);
+        if digest[0] != left_0 || digest[1] != left_1 {
+            return p.signature_verified(false)
+        }
+        (hash_algo, digest)
+
+    } else if version == 4 {
+
+        let sigtype = try!(Type::from_byte(try!(body.read_u8())));
+        let pk_algo = try!(PublicKeyAlgorithm::from_byte(try!(body.read_u8())));
+        let hash_algo = try!(HashAlgorithm::from_byte(try!(body.read_u8())));
+        match pk_algo {
+            PublicKeyAlgorithm::Ed25519 => {},
+            PublicKeyAlgorithm::RSAEncryptSign => {},
+            t => return Err(Error::UnsupportedPublicKey(t))
+        }
+        match hash_algo {
+            HashAlgorithm::SHA256 => {},
+            t => return Err(Error::UnsupportedHash(t))
+        }
+        debug!("{:?} {:?} {:?}", sigtype, pk_algo, hash_algo);
+
+        let mut hashed_subpacket = try!(body.read_string());
+        let initial_len = initial_body.len() - body.len();
+        debug!("initial_len: {:?}", initial_len);
+        let mut unhashed_subpacket = try!(body.read_string());
+
+        while hashed_subpacket.len() > 0 {
+            let sub = try!(Subpacket::read(&mut hashed_subpacket));
+            match sub {
+                Subpacket::Issuer(ref i) => issuer.clone_from_slice(i),
+                _ => {}
             }
-            (hash_algo, digest)
-
-        } else if version == 4 {
-
-            let sigtype = Type::from_byte(try!(body.read_u8())).unwrap();
-            let pk_algo = try!(PublicKeyAlgorithm::from_byte(try!(body.read_u8())));
-            let hash_algo = try!(HashAlgorithm::from_byte(try!(body.read_u8())));
-            match pk_algo {
-                PublicKeyAlgorithm::Ed25519 => {},
-                PublicKeyAlgorithm::RSAEncryptSign => {},
-                t => return Err(Error::UnsupportedPublicKey(t))
+            try!(p.signature_subpacket(sub))
+        }
+        while unhashed_subpacket.len() > 0 {
+            let sub = try!(Subpacket::read(&mut unhashed_subpacket));
+            match sub {
+                Subpacket::Issuer(ref i) => issuer.clone_from_slice(i),
+                _ => {}
             }
-            match hash_algo {
-                HashAlgorithm::SHA256 => {},
-                t => return Err(Error::UnsupportedHash(t))
-            }
-            debug!("{:?} {:?} {:?}", sigtype, pk_algo, hash_algo);
-
-            let mut hashed_subpacket = try!(body.read_string());
-            let initial_len = initial_body.len() - body.len();
-            debug!("initial_len: {:?}", initial_len);
-            let mut unhashed_subpacket = try!(body.read_string());
-
-            while hashed_subpacket.len() > 0 {
-                let sub = try!(Subpacket::read(&mut hashed_subpacket));
-                debug!("hashed subpakcet: {:?}", sub);
-            }
-            while unhashed_subpacket.len() > 0 {
-                let sub = try!(Subpacket::read(&mut unhashed_subpacket));
-                debug!("unhashed subpacket: {:?}", sub);
-            }
-
-            let left_0 = try!(body.read_u8());
-            let left_1 = try!(body.read_u8());
-            debug!("{:?} {:?}", &initial_body[0..initial_len], data);
-            let digest = sha256_version4(data, &initial_body[0..initial_len]);
-            if digest[0] != left_0 || digest[1] != left_1 {
-                debug!("digest {:?}, {:?} {:?}", digest, left_0, left_1);
-                return Ok(false);
-            }
-
-            (hash_algo, digest)
-
-        } else {
-            return Err(Error::UnknownSignatureVersion(version))
-        };
-
-        // Read sig
-        let mut signature = Vec::new();
-
-        while body.len() > 0 {
-            if body.len() < 2 {
-                debug!("{:?}", body);
-            }
-            let next_mpi = try!(body.read_mpi());
-            debug!("{:?}", next_mpi.to_hex());
-            signature.extend(next_mpi);
+            try!(p.signature_subpacket(sub))
         }
 
-        self.verify_signature(hash_algo, &digest, &signature)
+        let left_0 = try!(body.read_u8());
+        let left_1 = try!(body.read_u8());
+        let digest = {
+            let data = p.get_signed_data(sigtype);
+            debug!("{:?} {:?}", &initial_body[0..initial_len], data);
+            sha256_version4(data, &initial_body[0..initial_len])
+        };
+        if digest[0] != left_0 || digest[1] != left_1 {
+            debug!("digest {:?}, {:?} {:?}", digest, left_0, left_1);
+            return p.signature_verified(false)
+        }
+
+        (hash_algo, digest)
+
+    } else {
+        return Err(Error::UnknownSignatureVersion(version))
+    };
+
+    // Read sig
+    let mut signature = Vec::new();
+
+    while body.len() > 0 {
+        if body.len() < 2 {
+            debug!("{:?}", body);
+        }
+        let next_mpi = try!(body.read_mpi());
+        debug!("{:?}", next_mpi.to_hex());
+        signature.extend(next_mpi);
     }
+    let signature_ok = if let Some(ref key) = p.get_public_signing_key(&issuer) {
+        try!(key.verify_signature(hash_algo, &digest, &signature))
+    } else {
+        return Err(Error::NoPublicKey)
+    };
+    p.signature_verified(signature_ok)
 }
+
 
 
 const VERSION: u8 = 4;

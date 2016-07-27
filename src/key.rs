@@ -30,6 +30,20 @@ pub enum Key {
     Secret(SecretKey),
 }
 
+impl Key {
+    pub fn unwrap_secret(&self) -> &SecretKey {
+        match self {
+            &Key::Secret(ref k) => k,
+            _ => panic!("This key is not a secret key")
+        }
+    }
+    pub fn unwrap_public(&self) -> &PublicKey {
+        match self {
+            &Key::Public(ref k) => k,
+            _ => panic!("This key is not a public key")
+        }
+    }
+}
 
 fn write_rsa_public_key<W: Write>(w: &mut W, k: &openssl::crypto::rsa::RSA) -> Result<(), Error> {
     try!(w.write_u8(PublicKeyAlgorithm::RSAEncryptSign as u8));
