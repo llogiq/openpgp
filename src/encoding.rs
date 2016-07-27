@@ -62,7 +62,6 @@ pub fn read_length<R: Read>(l0: usize, s: &mut R) -> Result<usize, Error> {
         l0
     } else if l0 <= 223 {
         let l1 = try!(s.read_u8()) as usize;
-        println!("l1 {:?}", l1);
         (((l0 - 192) << 8) | l1) + 192
     } else {
         debug_assert!(l0 == 0xff);

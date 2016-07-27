@@ -71,7 +71,7 @@ pub fn read<B: Read>(reader: &mut B, body: &mut Vec<u8>) -> Result<Tag, Error> {
     assert_eq!(tag & 0x80, 0x80);
 
     let is_new_format = tag & 0x40 == 0x40;
-    println!("new format: {:?}", is_new_format);
+    debug!("new format: {:?}", is_new_format);
 
     let tag = if is_new_format {
 
@@ -79,7 +79,7 @@ pub fn read<B: Read>(reader: &mut B, body: &mut Vec<u8>) -> Result<Tag, Error> {
 
         let mut l0 = try!(reader.read_u8());
         if l0 >= 224 && l0 < 0xff {
-            println!("Partial body length");
+            debug!("Partial body length");
             while l0 >= 224 && l0 < 0xff {
                 // partial length
                 let len = 1 << (l0 & 0x1f);
@@ -98,7 +98,7 @@ pub fn read<B: Read>(reader: &mut B, body: &mut Vec<u8>) -> Result<Tag, Error> {
 
         } else {
             let len = try!(read_length(l0 as usize, reader));
-            println!("len = {:?}", len);
+            debug!("len = {:?}", len);
             body.resize(len, 0);
             try!(reader.read_exact(&mut body[..]));
         }
@@ -108,7 +108,7 @@ pub fn read<B: Read>(reader: &mut B, body: &mut Vec<u8>) -> Result<Tag, Error> {
     } else {
 
         let packet_tag = (tag >> 2) & 0xf;
-        println!("packet_tag: {:?}", Tag::from_byte(packet_tag));
+        debug!("packet_tag: {:?}", Tag::from_byte(packet_tag));
         let length_type = tag & 0x3;
         if length_type == 0 {
 

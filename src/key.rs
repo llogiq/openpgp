@@ -25,6 +25,11 @@ pub enum SecretKey {
     },
 }
 
+pub enum Key {
+    Public(PublicKey),
+    Secret(SecretKey),
+}
+
 
 fn write_rsa_public_key<W: Write>(w: &mut W, k: &openssl::crypto::rsa::RSA) -> Result<(), Error> {
     try!(w.write_u8(PublicKeyAlgorithm::RSAEncryptSign as u8));

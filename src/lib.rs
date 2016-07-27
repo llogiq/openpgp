@@ -1,3 +1,82 @@
+//!
+//!
+//! ```
+//! use openpgp::*;
+//! use openpgp::key::*;
+//! struct P {
+//!     key: Option<Key>,
+//!     subkey: Option<Key>,
+//!     data: Vec<u8>,
+//!     password: &'static [u8],
+//! }
+//!
+//! impl PGP for P {
+//!
+//!     fn get_secret_key<'a>(&'a mut self, _: &[u8]) -> &'a key::SecretKey {
+//!         self.subkey.as_ref().unwrap()
+//!     }
+//!
+//!     fn get_password(&mut self) -> &[u8] {
+//!         &self.password
+//!     }
+//!
+//!     fn public_key(&mut self, _: u32, public_key: key::PublicKey) -> Result<(), Error> {
+//!         self.key = Some(Key::Public(public_key));
+//!         Ok(())
+//!     }
+//!
+//!     fn secret_key(&mut self, _: u32, secret_key: key::SecretKey) -> Result<(), Error> {
+//!         self.key = Some(Key::Secret(secret_key));
+//!         Ok(())
+//!     }
+//!     fn secret_subkey(&mut self, _: u32, secret_key: key::SecretKey) -> Result<(), Error> {
+//!         self.subkey = Some(Key::Secret(secret_key));
+//!         Ok(())
+//!     }
+//!
+//!     fn signature(&mut self, packet: signature::SignaturePacket) -> Result<(), Error> {
+//!         let pk = self.key.as_ref().unwrap();
+//!         println!("Signature verified: {:?}", pk.verify(packet, &self.data));
+//!         Ok(())
+//!     }
+//! }
+//! let secret_key = "-----BEGIN PGP PRIVATE KEY BLOCK-----\nVersion: GnuPG v2\n\n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\n=USRz\n-----END PGP PRIVATE KEY BLOCK-----\n";
+//!
+//! let contents = b"Moi non plus, Bob";
+//! let mut p = P {
+//!     key: None,
+//!     subkey: None,
+//!     data: contents.to_vec(),
+//!     password: b"blabla blibli",
+//! };
+//!
+//! {
+//!     let mut sk = secret_key.as_bytes();
+//!     let sk = read_armored(&mut sk);
+//!     let mut sk = &sk[..];
+//!     p.parse(&mut sk).unwrap();
+//! };
+//!
+//! let mut s = Vec::new();
+//! {
+//!     let mut buf = Vec::new();
+//!
+//!     let now = std::time::SystemTime::now();
+//!     let now = now.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as u32;
+//!     if let Some(Key::Secret(ref sk)) = p.key {
+//!         sk.sign(&mut buf,
+//!                 contents,
+//!                 signature::Type::Binary,
+//!                 &[signature::Subpacket::SignatureCreationTime(now)],
+//!                 &[])
+//!           .unwrap();
+//!         packet::write_packet(&mut s, packet::Tag::Signature, &buf).unwrap();
+//!     }
+//! }
+//! let mut slice = &s[..];
+//! p.parse(&mut slice).unwrap();
+//! ```
+
 #[macro_use]
 extern crate log;
 extern crate byteorder;
@@ -23,10 +102,11 @@ use algorithm::*;
 mod encoding;
 use encoding::*;
 mod sodium;
-mod packet;
+pub mod packet;
 
 pub mod signature;
-mod key;
+pub use signature::Verify;
+pub mod key;
 
 
 #[derive(Debug)]
@@ -65,30 +145,30 @@ pub trait PGP: Sized {
 
     #[allow(unused_variables)]
     fn public_key(&mut self, creation_time: u32, pk: key::PublicKey) -> Result<(), Error> {
-        println!("public key: {:?}", creation_time);
+        debug!("public key: {:?}", creation_time);
         Ok(())
     }
     #[allow(unused_variables)]
     fn public_subkey(&mut self, creation_time: u32, pk: key::PublicKey) -> Result<(), Error> {
-        println!("public subkey: {:?}", creation_time);
+        debug!("public subkey: {:?}", creation_time);
         Ok(())
     }
 
     #[allow(unused_variables)]
     fn secret_key(&mut self, creation_time: u32, pk: key::SecretKey) -> Result<(), Error> {
-        println!("secret key: {:?}", creation_time);
+        debug!("secret key: {:?}", creation_time);
         Ok(())
     }
 
     #[allow(unused_variables)]
     fn secret_subkey(&mut self, creation_time: u32, pk: key::SecretKey) -> Result<(), Error> {
-        println!("secret subkey: {:?}", creation_time);
+        debug!("secret subkey: {:?}", creation_time);
         Ok(())
     }
 
     #[allow(unused_variables)]
     fn user_id(&mut self, user_id: &str) -> Result<(), Error> {
-        println!("user id: {:?}", user_id);
+        debug!("user id: {:?}", user_id);
         Ok(())
     }
 
@@ -236,11 +316,9 @@ fn parse_<R: Read, P: PGP>(p: &mut P,
                     a
                 };
                 let date = try!(lit.read_u32::<BigEndian>());
-                println!("name {:?} date {:?}", std::str::from_utf8(file_name), date);
 
                 match type_ {
                     b'b' => {
-                        println!("{:?}", String::from_utf8_lossy(lit));
                         for onepass in parse.one_pass.iter_mut() {
                             try!(onepass.hasher.write_all(lit));
                         }
@@ -308,7 +386,7 @@ fn parse_<R: Read, P: PGP>(p: &mut P,
                 }
             }
             Err(e) => {
-                println!("error {:?}", e);
+                debug!("error {:?}", e);
                 break;
             }
         }
@@ -338,14 +416,13 @@ fn parse_pk_session_key<P: PGP>(p: &mut P, mut body: &[u8]) -> Result<SymmetricK
                     let mut key = PKey::new();
                     key.set_rsa(pk);
                     let mpi = try!(body.read_mpi());
-                    println!("mpi {:?}", mpi);
 
                     let session_key = key.private_decrypt_with_padding(mpi,
                                                                        EncryptionPadding::PKCS1v15);
                     let mut session_key = &session_key[..];
-                    println!("session key {:?}", session_key);
+                    debug!("session key {:?}", session_key);
                     let algo = try!(session_key.read_u8());
-                    println!("algo {:?}", algo);
+                    debug!("algo {:?}", algo);
                     let (key, mut check) = session_key.split_at(session_key.len() - 2);
 
                     match try!(SymmetricKeyAlgorithm::from_byte(algo)) {
@@ -413,18 +490,11 @@ pub fn read_armored<R: BufRead>(r: &mut R) -> Vec<u8> {
 mod tests {
     extern crate env_logger;
     use super::*;
-    use super::packet;
-    use super::key;
     use std;
-    use signature::Verify;
-
+    use key::*;
     const SECRET_KEY: &'static str = include_str!("secret_key.asc");
     const PUBLIC_KEY:&'static str = include_str!("public_key.asc");
 
-    enum Key {
-        Public(key::PublicKey),
-        Secret(key::SecretKey),
-    }
 
     struct P {
         key: Option<Key>,
@@ -447,38 +517,27 @@ mod tests {
         }
 
         fn public_key(&mut self, _: u32, public_key: key::PublicKey) -> Result<(), Error> {
-            println!("PK ============================== ");
             self.key = Some(Key::Public(public_key));
             Ok(())
         }
         fn secret_key(&mut self, _: u32, secret_key: key::SecretKey) -> Result<(), Error> {
-            println!("SK ============================== ");
             self.key = Some(Key::Secret(secret_key));
             Ok(())
         }
         fn secret_subkey(&mut self, _: u32, secret_key: key::SecretKey) -> Result<(), Error> {
-            println!("SK ============================== ");
             self.subkey = Some(Key::Secret(secret_key));
             Ok(())
         }
 
         fn literal(&mut self, literal: &[u8]) -> Result<(), Error> {
-            println!("LITERAL ===========");
             self.data.clear();
             self.data.extend(literal);
             Ok(())
         }
 
         fn signature(&mut self, packet: signature::SignaturePacket) -> Result<(), Error> {
-
-            println!("SIGNATURE ============================== ");
             if let Some(ref pk) = self.key {
-                let verif = match *pk {
-                    Key::Public(ref k) => k.verify(packet, &self.data),
-                    Key::Secret(ref k) => k.verify(packet, &self.data),
-                };
-                println!("VERIFY?: {:?}", verif);
-
+                println!("Verified: {:?}", pk.verify(packet, &self.data));
             }
             Ok(())
         }
@@ -519,7 +578,6 @@ mod tests {
         let _ = env_logger::init();
 
         let contents = b"This is a test file";
-        println!("reading secret key");
 
         let mut p = P {
             key: None,
@@ -535,7 +593,6 @@ mod tests {
             let mut sk = &sk[..];
             p.parse(&mut sk).unwrap();
         };
-        println!("Done reading keys");
         let mut s = Vec::new();
         {
             let mut buf = Vec::new();
@@ -549,7 +606,6 @@ mod tests {
                         &[signature::Subpacket::SignatureCreationTime(now)],
                         &[])
                   .unwrap();
-                println!("buf: {:?}", buf);
                 packet::write_packet(&mut s, packet::Tag::Signature, &buf).unwrap();
             }
         }
@@ -601,7 +657,6 @@ mod tests {
 
         if let Some(Key::Secret(ref sk)) = p.key {
 
-            println!("key read");
             let mut v = Vec::new();
             let new_password = b"new_password";
             let now = std::time::SystemTime::now();
@@ -612,7 +667,6 @@ mod tests {
                      super::algorithm::SymmetricKeyAlgorithm::AES128,
                      new_password)
               .unwrap();
-            println!("key written");
             let mut v = &v[..];
             key::SecretKey::read(&mut v, new_password).unwrap();
         }
@@ -621,7 +675,6 @@ mod tests {
 
     #[test]
     fn email_pgp_message() {
-
         let email = include_str!("email.asc");
 
         let email = {
@@ -645,7 +698,6 @@ mod tests {
             p.parse(&mut sk).unwrap();
         }
 
-        println!("==================== parsing email");
         p.parse(&mut email).unwrap();
     }
 

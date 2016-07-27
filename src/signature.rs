@@ -6,7 +6,7 @@ use rustc_serialize::hex::ToHex;
 use std;
 use std::io::{Write};
 use openssl::crypto::hash;
-use key::{PublicKey, SecretKey};
+use key::{PublicKey, SecretKey, Key};
 use algorithm::*;
 use encoding::{ReadValue, WriteValue, read_length};
 
@@ -103,6 +103,14 @@ impl Verify for SecretKey {
     }
 }
 
+impl Verify for Key {
+    fn verify_signature(&self, hash_algorithm:HashAlgorithm, hash:&[u8], signature:&[u8]) -> Result<bool, Error> {
+        match *self {
+            Key::Secret(ref k) => k.verify_signature(hash_algorithm, hash, signature),
+            Key::Public(ref k) => k.verify_signature(hash_algorithm, hash, signature)
+        }
+    }
+}
 #[derive(Copy, Clone)]
 pub struct SignaturePacket<'a>(pub &'a [u8]);
 
@@ -173,16 +181,16 @@ pub trait Verify {
                 HashAlgorithm::SHA256 => {},
                 t => return Err(Error::UnsupportedHash(t))
             }
-            println!("{:?} {:?} {:?}", sigtype, pk_algo, hash_algo);
+            debug!("{:?} {:?} {:?}", sigtype, pk_algo, hash_algo);
 
             let mut hashed_subpacket = try!(body.read_string());
             let initial_len = initial_body.len() - body.len();
-            println!("initial_len: {:?}", initial_len);
+            debug!("initial_len: {:?}", initial_len);
             let mut unhashed_subpacket = try!(body.read_string());
 
             while hashed_subpacket.len() > 0 {
                 let sub = try!(Subpacket::read(&mut hashed_subpacket));
-                println!("hashed subpakcet: {:?}", sub);
+                debug!("hashed subpakcet: {:?}", sub);
             }
             while unhashed_subpacket.len() > 0 {
                 let sub = try!(Subpacket::read(&mut unhashed_subpacket));
@@ -191,10 +199,10 @@ pub trait Verify {
 
             let left_0 = try!(body.read_u8());
             let left_1 = try!(body.read_u8());
-            println!("{:?} {:?}", &initial_body[0..initial_len], data);
+            debug!("{:?} {:?}", &initial_body[0..initial_len], data);
             let digest = sha256_version4(data, &initial_body[0..initial_len]);
             if digest[0] != left_0 || digest[1] != left_1 {
-                println!("digest {:?}, {:?} {:?}", digest, left_0, left_1);
+                debug!("digest {:?}, {:?} {:?}", digest, left_0, left_1);
                 return Ok(false);
             }
 
@@ -276,7 +284,7 @@ impl SecretKey {
             SecretKey::RSAEncryptSign(ref sk) => {
 
                 let sig = try!(sk.sign(hash::Type::SHA256, &digest));
-                println!("writing RSA signature {:?}", sig);
+                debug!("writing RSA signature {:?}", sig);
                 try!(buffer.write_mpi(sig.len() << 3, &sig));
                 Ok(())
             },
