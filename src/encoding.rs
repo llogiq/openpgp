@@ -1,6 +1,6 @@
 use Error;
 use std;
-use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt, ByteOrder};
+use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt};
 use std::io::Read;
 
 pub trait ReadValue<'a> {

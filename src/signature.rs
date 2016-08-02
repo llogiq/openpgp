@@ -55,8 +55,8 @@ impl Type {
 
 fn sha256_version4(data: &[u8], hashed_sig_data: &[u8]) -> sodium::sha256::Digest {
     let mut v: Vec<u8> = Vec::new();
-    v.extend(data);
-    v.extend(hashed_sig_data);
+    v.extend_from_slice(data);
+    v.extend_from_slice(hashed_sig_data);
     // https://tools.ietf.org/html/rfc4880#section-5.2.4
     v.push(4);
     v.push(0xff);
@@ -71,7 +71,7 @@ impl Verify for PublicKey {
         use key::PublicKey::*;
         match *self {
             Ed25519(ref pk) => {
-                Ok(sodium::ed25519::verify_detached(&signature, hash, sodium::ed25519::PublicKey(pk)))
+                Ok(sodium::ed25519::verify_detached(signature, hash, sodium::ed25519::PublicKey(pk)))
             },
             RSAEncryptSign(ref pk) => {
                 let t = match hash_algorithm {
@@ -90,7 +90,7 @@ impl Verify for SecretKey {
         use key::SecretKey::*;
         match *self {
             Ed25519 { ref pk, .. } => {
-                Ok(sodium::ed25519::verify_detached(&signature, hash, sodium::ed25519::PublicKey(pk)))
+                Ok(sodium::ed25519::verify_detached(signature, hash, sodium::ed25519::PublicKey(pk)))
             },
             RSAEncryptSign(ref sk) => {
                 let t = match hash_algorithm {
@@ -148,7 +148,7 @@ pub fn read<P:super::PGP>(p:&mut P,
         let hash_algo = try!(HashAlgorithm::from_byte(try!(body.read_u8())));
 
         match pk_algo {
-            PublicKeyAlgorithm::Ed25519 => {},
+            PublicKeyAlgorithm::Ed25519 |
             PublicKeyAlgorithm::RSAEncryptSign => {},
             t => return Err(Error::UnsupportedPublicKey(t))
         }
@@ -164,9 +164,9 @@ pub fn read<P:super::PGP>(p:&mut P,
         let mut v: Vec<u8> = Vec::new();
         {
             let data = p.get_signed_data(sigtype);
-            v.extend(data);
+            v.extend_from_slice(data);
         }
-        v.extend(&initial_body[0..5]);
+        v.extend_from_slice(&initial_body[0..5]);
         let digest = sodium::sha256::hash(&v);
 
         if digest[0] != left_0 || digest[1] != left_1 {
@@ -180,7 +180,7 @@ pub fn read<P:super::PGP>(p:&mut P,
         let pk_algo = try!(PublicKeyAlgorithm::from_byte(try!(body.read_u8())));
         let hash_algo = try!(HashAlgorithm::from_byte(try!(body.read_u8())));
         match pk_algo {
-            PublicKeyAlgorithm::Ed25519 => {},
+            PublicKeyAlgorithm::Ed25519 |
             PublicKeyAlgorithm::RSAEncryptSign => {},
             t => return Err(Error::UnsupportedPublicKey(t))
         }
@@ -197,17 +197,15 @@ pub fn read<P:super::PGP>(p:&mut P,
 
         while hashed_subpacket.len() > 0 {
             let sub = try!(Subpacket::read(&mut hashed_subpacket));
-            match sub {
-                Subpacket::Issuer(ref i) => issuer.clone_from_slice(i),
-                _ => {}
+            if let Subpacket::Issuer(ref i) = sub {
+                issuer.clone_from_slice(i)
             }
             try!(p.signature_subpacket(sub))
         }
         while unhashed_subpacket.len() > 0 {
             let sub = try!(Subpacket::read(&mut unhashed_subpacket));
-            match sub {
-                Subpacket::Issuer(ref i) => issuer.clone_from_slice(i),
-                _ => {}
+            if let Subpacket::Issuer(ref i) = sub {
+                issuer.clone_from_slice(i)
             }
             try!(p.signature_subpacket(sub))
         }
@@ -239,7 +237,7 @@ pub fn read<P:super::PGP>(p:&mut P,
         }
         let next_mpi = try!(body.read_mpi());
         debug!("{:?}", next_mpi.to_hex());
-        signature.extend(next_mpi);
+        signature.extend_from_slice(next_mpi);
     }
     let signature_ok = if let Some(ref key) = p.get_public_signing_key(&issuer) {
         try!(key.verify_signature(hash_algo, &digest, &signature))

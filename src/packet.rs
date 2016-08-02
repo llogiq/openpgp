@@ -1,4 +1,4 @@
-use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt, ByteOrder};
+use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt};
 use std::io::{Write, Read};
 use super::*;
 use encoding::read_length;

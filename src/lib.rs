@@ -105,7 +105,7 @@ extern crate flate2;
 
 
 use rustc_serialize::base64::FromBase64;
-use byteorder::{BigEndian, ReadBytesExt, ByteOrder};
+use byteorder::{BigEndian, ReadBytesExt};
 use std::io::{Read, Write, BufRead};
 
 #[cfg(test)]
@@ -377,7 +377,7 @@ fn parse_<R: Read, P: PGP>(p: &mut P,
 
                 match type_ {
                     b'b' => {
-                        for onepass in parser.one_pass.iter_mut() {
+                        for onepass in &mut parser.one_pass {
                             try!(onepass.hasher.write_all(lit));
                         }
                         try!(p.literal(try!(std::str::from_utf8(file_name)), date, lit));
@@ -466,9 +466,9 @@ fn parse_pk_session_key<P: PGP>(p: &mut P, mut body: &[u8]) -> Result<SymmetricK
     let algo = try!(PublicKeyAlgorithm::from_byte(try!(body.read_u8())));
     match algo {
         PublicKeyAlgorithm::RSAEncryptSign => {
-            match p.get_secret_key(keyid) {
+            match *p.get_secret_key(keyid) {
 
-                &key::SecretKey::RSAEncryptSign(ref pk) => {
+                key::SecretKey::RSAEncryptSign(ref pk) => {
 
                     use openssl::crypto::pkey::*;
                     let mut key = PKey::new();
@@ -529,15 +529,13 @@ pub fn read_armored<R: BufRead>(r: &mut R) -> Vec<u8> {
             break;
         } else if armor_started {
             if contents_started {
-                if buf.starts_with("=") {
+                if buf.starts_with('=') {
                     contents_started = false
                 } else {
                     fin = fin + buf.trim_right()
                 }
-            } else {
-                if buf.trim_right() == "" {
-                    contents_started = true
-                }
+            } else if buf.trim_right() == "" {
+                contents_started = true
             }
         }
     }

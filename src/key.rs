@@ -1,8 +1,8 @@
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt, ByteOrder};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use super::*;
 use super::sodium;
 
-use std::io::{Read, Write};
+use std::io::Write;
 use openssl;
 use std::cmp::min;
 use std::num::Wrapping;
@@ -32,14 +32,14 @@ pub enum Key {
 
 impl Key {
     pub fn unwrap_secret(&self) -> &SecretKey {
-        match self {
-            &Key::Secret(ref k) => k,
+        match *self {
+            Key::Secret(ref k) => k,
             _ => panic!("This key is not a secret key")
         }
     }
     pub fn unwrap_public(&self) -> &PublicKey {
-        match self {
-            &Key::Public(ref k) => k,
+        match *self {
+            Key::Public(ref k) => k,
             _ => panic!("This key is not a public key")
         }
     }
@@ -129,7 +129,7 @@ fn generate_key(hash_algo: HashAlgorithm, salt: &[u8], c: u8, password: &[u8]) -
     let count = (16 + (c & 15)) << ((c >> 4) + 6);
     let count = count as usize;
     let mut s = salt.to_vec();
-    s.extend(password);
+    s.extend_from_slice(password);
     use openssl::crypto::hash::{Hasher, Type};
     let mut hasher = match hash_algo {
         HashAlgorithm::SHA1 => Hasher::new(Type::SHA1),
@@ -144,7 +144,7 @@ fn generate_key(hash_algo: HashAlgorithm, salt: &[u8], c: u8, password: &[u8]) -
         byte_count += s.len()
     }
     let s = &s[0..min(s.len(), count - byte_count)];
-    hasher.write_all(&s).unwrap();
+    hasher.write_all(s).unwrap();
     hasher.finish()
 }
 // Secret key packets.
@@ -182,7 +182,7 @@ impl SecretKey {
                         use openssl::crypto::symm::*;
                         let (iv, b) = body.split_at(16);
                         *body = b;
-                        decrypt(Type::AES_128_CFB128, &key[0..16], &iv, body)
+                        decrypt(Type::AES_128_CFB128, &key[0..16], iv, body)
                     };
 
                     let mut s = &v[..];
@@ -292,7 +292,7 @@ impl SecretKey {
             use openssl::crypto::hash::{hash, Type};
             hash(Type::SHA1, &body)
         };
-        body.extend(&digest);
+        body.extend_from_slice(&digest);
 
         use openssl::crypto::symm::*;
         try!(w.write(&encrypt(Type::AES_128_CFB128, &key[0..16], &c[9..], &body)));
